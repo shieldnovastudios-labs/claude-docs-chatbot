@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs Chatbot</title>
+<style>
+  /* Change these to match your website. */
+  :root {
+    --accent: #0f766e;
+    --accent-strong: #115e59;
+    --accent-soft: #e6f4f2;
+    --bg: #f6f5f1;
+    --panel: #ffffff;
+    --text: #1c1f23;
+    --muted: #5b6470;
+    --line: #e4e2dc;
+    --bot-bubble: #f2f1ed;
+    --radius: 18px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --accent: #2dd4bf; --accent-strong: #5eead4; --accent-soft: #123a37;
+      --bg: #121416; --panel: #1b1e21; --text: #eceef0; --muted: #a2a9b1;
+      --line: #2c3136; --bot-bubble: #24282c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --accent: #2dd4bf; --accent-strong: #5eead4; --accent-soft: #123a37;
+    --bg: #121416; --panel: #1b1e21; --text: #eceef0; --muted: #a2a9b1;
+    --line: #2c3136; --bot-bubble: #24282c;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); }
+
+  /* ---------- Sample host website (hidden in ?embed=1 mode) ---------- */
+  .site { max-width: 1100px; margin: 0 auto; padding: 28px 32px; }
+  .site nav { display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+  .logo span { color: var(--accent); }
+  .site nav ul { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; color: var(--muted); font-size: 14px; }
+  .hero { padding: 96px 0 40px; max-width: 520px; }
+  .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
+  .hero h1 { font-size: 44px; line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 18px; }
+  .hero p { color: var(--muted); font-size: 17px; margin: 0 0 28px; }
+  .fake-btn { display: inline-block; background: var(--text); color: var(--bg); padding: 12px 22px; border-radius: 999px; font-weight: 600; font-size: 14px; }
+  .note { margin-top: 56px; font-size: 12px; color: var(--muted); }
+
+  /* ---------- Chat widget ---------- */
+  .cw { position: fixed; right: 24px; bottom: 24px; z-index: 1000; display: flex; flex-direction: column; align-items: flex-end; gap: 14px; }
+  .cw-panel {
+    width: 380px; height: min(600px, calc(100vh - 120px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: 0 24px 60px -20px rgba(16, 24, 32, .28), 0 2px 6px rgba(16, 24, 32, .06);
+    display: flex; flex-direction: column; overflow: hidden;
+    transform-origin: bottom right; transition: opacity .18s ease, transform .18s ease;
+  }
+  .cw-panel[hidden] { display: none; }
+  .cw-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .cw-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
+  .cw-title { font-weight: 650; font-size: 15px; line-height: 1.2; }
+  .cw-sub { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .cw-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+  .cw-close { margin-left: auto; border: 0; background: transparent; color: var(--muted); width: 36px; height: 36px; border-radius: 10px; cursor: pointer; display: grid; place-items: center; }
+  .cw-close:hover { background: var(--bot-bubble); color: var(--text); }
+
+  .cw-log { flex: 1; overflow-y: auto; padding: 18px 16px 8px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 86%; padding: 10px 14px; border-radius: 16px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 6px; }
+  :root[data-theme="dark"] .msg.user { color: #06201d; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .msg.user { color: #06201d; } }
+  .msg.bot { align-self: flex-start; background: var(--bot-bubble); border-bottom-left-radius: 6px; }
+  .msg.bot.refused { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+  .msg.error { align-self: center; font-size: 13px; color: #b42318; background: transparent; }
+  .sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; white-space: normal; }
+  .src { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; line-height: 1.3; padding: 3px 9px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+  .src svg { flex: none; }
+
+  .typing { display: inline-flex; gap: 4px; padding: 14px 16px; }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .5; animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: .9; } }
+
+  .cw-suggest { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 10px; }
+  .chip { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+
+  .cw-form { display: flex; align-items: flex-end; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+  .cw-input { flex: 1; resize: none; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; max-height: 120px; min-height: 44px; }
+  .cw-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .cw-send { flex: none; width: 44px; height: 44px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; cursor: pointer; display: grid; place-items: center; }
+  .cw-send:hover { background: var(--accent-strong); }
+  .cw-send:disabled { opacity: .45; cursor: not-allowed; }
+  .cw-foot { padding: 0 16px 12px; font-size: 11.5px; color: var(--muted); display: flex; justify-content: space-between; }
+
+  .cw-launcher { width: 58px; height: 58px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; cursor: pointer; box-shadow: 0 10px 24px -8px rgba(15, 118, 110, .55); display: grid; place-items: center; }
+  .cw-launcher:hover { background: var(--accent-strong); }
+
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+  /* Embed mode: the page IS the panel (put it in an iframe on any website). */
+  body.embed .site, body.embed .cw-launcher, body.embed .cw-close { display: none; }
+  body.embed .cw { inset: 0; }
+  body.embed .cw-panel { width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+
+  @media (max-width: 520px) {
+    .site { padding: 20px 16px; } .site nav ul { display: none; }
+    .hero { padding-top: 48px; } .hero h1 { font-size: 32px; }
+    .cw { right: 12px; bottom: 12px; left: 12px; }
+    .cw-panel { width: 100%; height: calc(100vh - 100px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Sample host page so you can see the widget in context. Not needed on your site. -->
+<div class="site" aria-hidden="true">
+  <nav>
+    <div class="logo">Bramblewood <span>Dog Spa</span></div>
+    <ul><li>Services</li><li>Prices</li><li>Book</li><li>Contact</li></ul>
+  </nav>
+  <section class="hero">
+    <p class="eyebrow">Fictional demo business</p>
+    <h1>Gentle grooming for happy dogs.</h1>
+    <p>Have a question about prices, opening hours or bookings? Ask our assistant in the corner. It answers only from our own documents.</p>
+    <span class="fake-btn">Book a groom</span>
+  </section>
+  <p class="note">Demo by ShieldNova Studios. Business, prices and contact details are fictional samples.</p>
+</div>
+
+<div class="cw">
+  <section class="cw-panel" id="cw-panel" role="dialog" aria-label="Chat with our assistant">
+    <header class="cw-head">
+      <div class="cw-avatar" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></svg>
+      </div>
+      <div>
+        <div class="cw-title" id="cw-name">Bramblewood Assistant</div>
+        <div class="cw-sub"><span class="cw-dot" aria-hidden="true"></span>Answers from our documents</div>
+      </div>
+      <button class="cw-close" type="button" id="cw-close" aria-label="Close chat">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    <div class="cw-log" id="cw-log" role="log" aria-live="polite" aria-relevant="additions" tabindex="0" aria-label="Conversation"></div>
+
+    <div class="cw-suggest" id="cw-suggest" aria-label="Suggested questions">
+      <button class="chip" type="button">How much is a full groom?</button>
+      <button class="chip" type="button">Are you open on Saturday?</button>
+      <button class="chip" type="button">What is your cancellation policy?</button>
+    </div>
+
+    <form class="cw-form" id="cw-form">
+      <label for="cw-input" class="sr-only">Your question</label>
+      <textarea class="cw-input" id="cw-input" rows="1" maxlength="500" placeholder="Ask a question…" autocomplete="off"></textarea>
+      <button class="cw-send" id="cw-send" type="submit" aria-label="Send question">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </form>
+    <div class="cw-foot"><span>AI answers can be wrong. Check key details with us.</span><span id="cw-count" aria-hidden="true"></span></div>
+  </section>
+
+  <button class="cw-launcher" id="cw-launcher" type="button" aria-controls="cw-panel" aria-expanded="true" aria-label="Close chat">
+    <svg class="ic-open" hidden width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></svg>
+    <svg class="ic-close" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+  </button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var MAX = 500;
+  var params = new URLSearchParams(location.search);
+  var endpoint = params.get("api") || "/ask";
+  var $ = function (id) { return document.getElementById(id); };
+  var log = $("cw-log"), form = $("cw-form"), input = $("cw-input"), send = $("cw-send");
+  var panel = $("cw-panel"), launcher = $("cw-launcher"), suggest = $("cw-suggest"), count = $("cw-count");
+  var busy = false;
+
+  if (params.has("embed")) document.body.classList.add("embed");
+  if (params.get("theme") === "dark" || params.get("theme") === "light") document.documentElement.dataset.theme = params.get("theme");
+
+  var docIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg>';
+
+  function addMessage(role, text, opts) {
+    opts = opts || {};
+    var el = document.createElement("div");
+    el.className = "msg " + role + (opts.refused ? " refused" : "");
+    var body = document.createElement("div");
+    body.textContent = text; // never innerHTML for model or user text
+    el.appendChild(body);
+    if (opts.sources && opts.sources.length) {
+      var list = document.createElement("div");
+      list.className = "sources";
+      var label = document.createElement("span");
+      label.className = "sr-only";
+      label.textContent = "Sources:";
+      list.appendChild(label);
+      var seen = {};
+      opts.sources.forEach(function (s) {
+        if (seen[s.document]) return;
+        seen[s.document] = true;
+        var chip = document.createElement("span");
+        chip.className = "src";
+        chip.title = s.section ? s.document + " — " + s.section : s.document;
+        chip.innerHTML = docIcon;
+        chip.appendChild(document.createTextNode(s.document));
+        list.appendChild(chip);
+      });
+      el.appendChild(list);
+    }
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  function showTyping() {
+    var el = document.createElement("div");
+    el.className = "msg bot typing";
+    el.setAttribute("aria-label", "Assistant is typing");
+    el.innerHTML = "<i></i><i></i><i></i>";
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  function updateCount() {
+    var n = input.value.length;
+    count.textContent = n > MAX - 100 ? n + "/" + MAX : "";
+    send.disabled = busy || !input.value.trim();
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 120) + "px";
+  }
+
+  function ask(question) {
+    question = question.trim().slice(0, MAX);
+    if (!question || busy) return;
+    busy = true;
+    suggest.hidden = true;
+    addMessage("user", question);
+    input.value = "";
+    updateCount();
+    var typing = showTyping();
+    fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: question })
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Something went wrong. Please try again.");
+          return data;
+        });
+      })
+      .then(function (data) {
+        typing.remove();
+        addMessage("bot", data.answer, { sources: data.sources, refused: data.refused && !(data.sources || []).length });
+      })
+      .catch(function (err) {
+        typing.remove();
+        addMessage("error", err.message || "Network error. Please try again.");
+      })
+      .finally(function () { busy = false; updateCount(); input.focus(); });
+  }
+
+  form.addEventListener("submit", function (e) { e.preventDefault(); ask(input.value); });
+  input.addEventListener("input", updateCount);
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(input.value); }
+  });
+  suggest.addEventListener("click", function (e) { if (e.target.classList.contains("chip")) ask(e.target.textContent); });
+
+  function setOpen(open) {
+    panel.hidden = !open;
+    launcher.setAttribute("aria-expanded", String(open));
+    launcher.setAttribute("aria-label", open ? "Close chat" : "Open chat");
+    launcher.querySelector(".ic-open").hidden = open;
+    launcher.querySelector(".ic-close").hidden = !open;
+    if (open) input.focus(); else launcher.focus();
+  }
+  launcher.addEventListener("click", function () { setOpen(panel.hidden); });
+  $("cw-close").addEventListener("click", function () { setOpen(false); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !panel.hidden && !document.body.classList.contains("embed")) setOpen(false); });
+
+  addMessage("bot", "Hi! I can answer questions about our services, prices, opening hours and booking policy.");
+
+  // ?demo=1 shows a sample conversation without calling the server (used for the README screenshot).
+  if (params.has("demo")) {
+    suggest.hidden = true;
+    addMessage("user", "How much is a full groom for a medium dog, and how long does it take?");
+    addMessage("bot", "A full groom for a medium dog (10–25 kg) is $70 (sample price). It includes a bath, blow-dry, haircut, nail trim and ear cleaning, and takes about 2 to 3 hours depending on the coat.",
+      { sources: [{ document: "services-and-prices.md", section: "Full groom" }] });
+    addMessage("user", "Can I cancel the morning of the appointment?");
+    addMessage("bot", "Please cancel at least 24 hours ahead. Cancellations with less than 24 hours' notice are charged 50% of the booked service price.",
+      { sources: [{ document: "booking-and-cancellation.md", section: "Cancellations and rescheduling" }] });
+    addMessage("user", "Do you do dog training classes?");
+    addMessage("bot", "I don't know — please contact us.", { refused: true });
+  }
+  updateCount();
+})();
+</script>
+</body>
+</html>
